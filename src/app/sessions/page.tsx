@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSocket } from '@/components/SocketProvider';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -43,7 +42,6 @@ type SortField = 'lastSeen' | 'firstSeen' | 'eventCount';
 type SortOrder = 'asc' | 'desc';
 
 export default function SessionsPage() {
-  const { socket } = useSocket();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -76,10 +74,14 @@ export default function SessionsPage() {
     }
   };
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchSessions();
-    }, 0);
-    return () => clearTimeout(timer);
+    fetchSessions(true);
+
+    // Poll sessions list every 5 seconds
+    const interval = setInterval(() => {
+      fetchSessions(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Fetch timeline events for a specific session when dialog opens
@@ -87,8 +89,8 @@ export default function SessionsPage() {
     if (!selectedSessionId) return;
 
     let active = true;
-    const fetchJourney = async () => {
-      setLoadingJourney(true);
+    const fetchJourney = async (showLoading = true) => {
+      if (showLoading) setLoadingJourney(true);
       try {
         const response = await fetch(`/api/sessions/${selectedSessionId}`);
         if (!response.ok) {
@@ -99,60 +101,22 @@ export default function SessionsPage() {
       } catch (err) {
         console.error(err);
       } finally {
-        if (active) setLoadingJourney(false);
+        if (active && showLoading) setLoadingJourney(false);
       }
     };
 
-    fetchJourney();
+    fetchJourney(true);
+
+    // Poll journey details every 5 seconds to get new events
+    const interval = setInterval(() => {
+      fetchJourney(false);
+    }, 5000);
+
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, [selectedSessionId]);
-
-  // Real-time socket updates for session aggregation
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleNewEvent = (event: TrackedEvent) => {
-      setSessions((prev) => {
-        const existingSessionIndex = prev.findIndex((s) => s.sessionId === event.sessionId);
-
-        if (existingSessionIndex >= 0) {
-          // Update existing session
-          const updated = [...prev];
-          const current = updated[existingSessionIndex];
-          updated[existingSessionIndex] = {
-            ...current,
-            eventCount: current.eventCount + 1,
-            lastSeen: event.timestamp,
-          };
-          return updated;
-        } else {
-          // Prepend new session
-          return [
-            {
-              sessionId: event.sessionId,
-              eventCount: 1,
-              firstSeen: event.timestamp,
-              lastSeen: event.timestamp,
-            },
-            ...prev,
-          ];
-        }
-      });
-
-      // If the currently open dialog session receives a live event, append it to timeline
-      if (selectedSessionId === event.sessionId) {
-        setJourneyEvents((prev) => [...prev, event]);
-      }
-    };
-
-    socket.on('new_event', handleNewEvent);
-
-    return () => {
-      socket.off('new_event', handleNewEvent);
-    };
-  }, [socket, selectedSessionId]);
 
   const handleCopy = (id: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Avoid opening dialog on copy click

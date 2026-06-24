@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import Script from 'next/script';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSocket } from '@/components/SocketProvider';
 import { TrackedEvent } from '@/types';
 import {
   ArrowLeft,
@@ -30,7 +29,6 @@ interface LocalLog {
 }
 
 export default function DemoPage() {
-  const { socket } = useSocket();
   const [localLogs, setLocalLogs] = useState<LocalLog[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
   const [emailInput, setEmailInput] = useState('');
@@ -52,32 +50,41 @@ export default function DemoPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Listen to Socket.io to stream events triggered by this specific session
+  const fetchLocalLogs = async (sessionId: string) => {
+    if (!sessionId) return;
+    try {
+      const response = await fetch(`/api/sessions/${sessionId}`);
+      if (!response.ok) throw new Error('Failed to fetch local logs');
+      const data: TrackedEvent[] = await response.json();
+      const mappedLogs: LocalLog[] = data.map((event) => ({
+        id: event._id || Math.random().toString(),
+        eventType: event.eventType,
+        pageUrl: event.pageUrl,
+        clickX: event.clickX,
+        clickY: event.clickY,
+        timestamp: event.timestamp,
+      }));
+      // Sort desc by timestamp so newest are first, limit to 15
+      const sortedLogs = [...mappedLogs].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      ).slice(0, 15);
+      setLocalLogs(sortedLogs);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
-    if (!socket || !currentSessionId) return;
+    if (!currentSessionId) return;
 
-    const handleNewEvent = (event: TrackedEvent) => {
-      // Filter logs to only show events from the current browser session
-      if (event.sessionId === currentSessionId) {
-        const newLog: LocalLog = {
-          id: event._id || Math.random().toString(),
-          eventType: event.eventType,
-          pageUrl: event.pageUrl,
-          clickX: event.clickX,
-          clickY: event.clickY,
-          timestamp: event.timestamp,
-        };
+    fetchLocalLogs(currentSessionId);
 
-        setLocalLogs((prev) => [newLog, ...prev].slice(0, 15)); // Limit to last 15 logs
-      }
-    };
+    const interval = setInterval(() => {
+      fetchLocalLogs(currentSessionId);
+    }, 3000); // 3 seconds for a responsive feel in demo console logs
 
-    socket.on('new_event', handleNewEvent);
-
-    return () => {
-      socket.off('new_event', handleNewEvent);
-    };
-  }, [socket, currentSessionId]);
+    return () => clearInterval(interval);
+  }, [currentSessionId]);
 
   // Handle manual session reset
   const handleResetSession = () => {

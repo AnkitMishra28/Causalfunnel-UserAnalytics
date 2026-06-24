@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { useSocket } from '@/components/SocketProvider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,7 +10,6 @@ import { HeatmapPoint, TrackedEvent } from '@/types';
 import { HeatmapInstance } from 'heatmap.js';
 
 export default function HeatmapPage() {
-  const { socket } = useSocket();
   const [pages, setPages] = useState<string[]>([]);
   const [selectedPage, setSelectedPage] = useState<string | null>(null);
   const [points, setPoints] = useState<HeatmapPoint[]>([]);
@@ -49,9 +47,9 @@ export default function HeatmapPage() {
   };
 
   // Fetch points for selected page
-  const fetchPoints = async (pageUrl: string | null) => {
+  const fetchPoints = async (pageUrl: string | null, showLoading = true) => {
     if (!pageUrl) return;
-    setLoadingPoints(true);
+    if (showLoading) setLoadingPoints(true);
     try {
       const encodedUrl = encodeURIComponent(pageUrl);
       const response = await fetch(`/api/heatmap?pageUrl=${encodedUrl}`);
@@ -61,24 +59,24 @@ export default function HeatmapPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoadingPoints(false);
+      if (showLoading) setLoadingPoints(false);
     }
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchPages();
-    }, 0);
-    return () => clearTimeout(timer);
+    fetchPages();
   }, []);
 
   useEffect(() => {
-    if (selectedPage) {
-      const timer = setTimeout(() => {
-        fetchPoints(selectedPage);
-      }, 0);
-      return () => clearTimeout(timer);
-    }
+    if (!selectedPage) return;
+
+    fetchPoints(selectedPage, true);
+
+    const interval = setInterval(() => {
+      fetchPoints(selectedPage, false);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [selectedPage]);
 
   // Initialize and update heatmap.js instance
@@ -122,39 +120,7 @@ export default function HeatmapPage() {
     initHeatmap();
   }, [points, viewMode, loadingPoints]);
 
-  // Real-time socket event updates
-  useEffect(() => {
-    if (!socket || !selectedPage) return;
 
-    const handleNewEvent = (event: TrackedEvent) => {
-      // Check if event is a click and matches the current selected page URL
-      if (event.eventType === 'click' && event.pageUrl === selectedPage && event.clickX != null && event.clickY != null) {
-        const newPoint: HeatmapPoint = {
-          x: event.clickX,
-          y: event.clickY,
-          value: 1
-        };
-
-        // Add to React state dots list
-        setPoints((prev) => [...prev, newPoint]);
-
-        // Add directly to active heatmap.js canvas if initialized
-        if (heatmapInstanceRef.current && viewMode !== 'dots') {
-          heatmapInstanceRef.current.addData({
-            x: event.clickX,
-            y: event.clickY,
-            value: 1
-          });
-        }
-      }
-    };
-
-    socket.on('new_event', handleNewEvent);
-
-    return () => {
-      socket.off('new_event', handleNewEvent);
-    };
-  }, [socket, selectedPage, viewMode]);
 
   return (
     <motion.div

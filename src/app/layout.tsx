@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
-import { SocketProvider } from '@/components/SocketProvider';
 import DashboardLayout from '@/components/DashboardLayout';
 
 const geistSans = Geist({
@@ -50,9 +49,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full bg-background text-foreground transition-colors duration-200">
         <ThemeProvider>
-          <SocketProvider>
-            <DashboardLayout>{children}</DashboardLayout>
-          </SocketProvider>
+          <DashboardLayout>{children}</DashboardLayout>
         </ThemeProvider>
       </body>
     </html>

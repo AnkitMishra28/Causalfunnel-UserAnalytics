@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from './ThemeProvider';
-import { useSocket } from './SocketProvider';
 import {
   LayoutDashboard,
   Users,
@@ -21,7 +20,6 @@ import { cn } from '@/lib/utils';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
-  const { connected } = useSocket();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // If we are on the demo page, render without sidebar layout
@@ -72,25 +70,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* Footer controls & Real-time Indicator */}
+        {/* Footer controls */}
         <div className="p-4 border-t border-border space-y-3">
-          {/* Socket Connection Status */}
-          <div className="flex items-center justify-between text-xs px-2 py-1.5 rounded-md bg-accent/20 border border-border/50">
-            <span className="flex items-center gap-2 text-muted-foreground">
-              <Activity className="h-3 w-3 text-muted-foreground" />
-              Live Sync
-            </span>
-            <span className="flex items-center gap-1.5 font-semibold">
-              <span
-                className={cn(
-                  'h-2 w-2 rounded-full animate-pulse',
-                  connected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-500'
-                )}
-              />
-              {connected ? 'Connected' : 'Connecting'}
-            </span>
-          </div>
-
           {/* Theme Switcher */}
           <button
             onClick={toggleTheme}
@@ -126,15 +107,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
-              <span
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                )}
-              />
-              {connected ? 'Live analytics stream connected' : 'Connecting stream...'}
-            </div>
             {/* Theme switcher on header for mobile */}
             <button
               onClick={toggleTheme}
@@ -194,13 +166,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Mobile Footer */}
             <div className="mt-auto border-t border-border pt-4 space-y-3">
-              <div className="flex items-center justify-between text-xs px-2 py-1.5 rounded-md bg-accent/20 border border-border/50">
-                <span className="text-muted-foreground">Socket Stream</span>
-                <span className="flex items-center gap-1 font-semibold">
-                  <span className={cn('h-1.5 w-1.5 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500')} />
-                  {connected ? 'Connected' : 'Connecting'}
-                </span>
-              </div>
               <button
                 onClick={() => {
                   toggleTheme();

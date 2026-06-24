@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSocket } from '@/components/SocketProvider';
 import {
   Card,
   CardContent,
@@ -46,12 +45,9 @@ interface OverviewData {
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#10b981', '#6366f1'];
 
 export default function OverviewPage() {
-  const { socket } = useSocket();
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [newEventsPulse, setNewEventsPulse] = useState<string[]>([]); // Track recent incoming events for visual pings
-  const knownSessionsRef = useRef<Set<string>>(new Set());
 
   // Function to fetch metrics from API
   const fetchOverviewData = async (showLoading = true) => {
@@ -77,95 +73,15 @@ export default function OverviewPage() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchOverviewData();
-    }, 0);
-    return () => clearTimeout(timer);
+    fetchOverviewData();
+
+    // Set up polling interval to refresh analytics every 5 seconds
+    const interval = setInterval(() => {
+      fetchOverviewData(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
-
-  // Set up real-time listener for Socket.io
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleNewEvent = (event: TrackedEvent) => {
-      // Create a visual toast/ping indicator
-      const pulseId = Math.random().toString();
-      setNewEventsPulse((prev) => [pulseId, ...prev.slice(0, 4)]);
-      setTimeout(() => {
-        setNewEventsPulse((prev) => prev.filter((id) => id !== pulseId));
-      }, 2000);
-
-      // Increment counters in real-time
-      setData((prev) => {
-        if (!prev) return prev;
-
-        const isNewSession = !knownSessionsRef.current.has(event.sessionId);
-        if (isNewSession) {
-          knownSessionsRef.current.add(event.sessionId);
-        }
-
-        const isClick = event.eventType === 'click';
-
-        // Update total counters
-        const updatedTotalSessions = isNewSession ? prev.totalSessions + 1 : prev.totalSessions;
-        const updatedTotalEvents = prev.totalEvents + 1;
-        const updatedTotalClicks = isClick ? prev.totalClicks + 1 : prev.totalClicks;
-
-        // Update distribution list
-        const updatedDistribution = [...prev.eventsDistribution];
-        const distIndex = updatedDistribution.findIndex((d) => d.name === event.eventType);
-        if (distIndex >= 0) {
-          updatedDistribution[distIndex] = {
-            ...updatedDistribution[distIndex],
-            value: updatedDistribution[distIndex].value + 1,
-          };
-        } else {
-          updatedDistribution.push({ name: event.eventType, value: 1 });
-        }
-
-        // Update sessionsTrend if new session and today's date exists, or append it
-        const todayStr = new Date(event.timestamp).toISOString().split('T')[0];
-        const updatedTrend = [...prev.sessionsTrend];
-        if (isNewSession) {
-          const trendIndex = updatedTrend.findIndex((t) => t.date === todayStr);
-          if (trendIndex >= 0) {
-            updatedTrend[trendIndex] = {
-              ...updatedTrend[trendIndex],
-              sessions: updatedTrend[trendIndex].sessions + 1,
-            };
-          } else {
-            updatedTrend.push({ date: todayStr, sessions: 1 });
-          }
-        }
-
-        return {
-          ...prev,
-          totalSessions: updatedTotalSessions,
-          totalEvents: updatedTotalEvents,
-          totalClicks: updatedTotalClicks,
-          eventsDistribution: updatedDistribution,
-          sessionsTrend: updatedTrend,
-        };
-      });
-    };
-
-    socket.on('new_event', handleNewEvent);
-
-    return () => {
-      socket.off('new_event', handleNewEvent);
-    };
-  }, [socket]);
-
-  // Sync known sessions when data is loaded
-  useEffect(() => {
-    if (data) {
-      // Re-fetch in background without showing loader occasionally to keep in sync
-      const timer = setInterval(() => {
-        fetchOverviewData(false);
-      }, 10000);
-      return () => clearInterval(timer);
-    }
-  }, [data]);
 
   // Loading Skeleton View
   if (loading) {
@@ -244,20 +160,7 @@ export default function OverviewPage() {
       transition={{ duration: 0.35, ease: 'easeOut' }}
       className="space-y-8"
     >
-      {/* Real-time alert indicator */}
-      <AnimatePresence>
-        {newEventsPulse.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="fixed top-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-emerald-500 text-white rounded-lg shadow-lg text-xs font-semibold backdrop-blur"
-          >
-            <Sparkles className="h-3.5 w-3.5 animate-spin" />
-            <span>New tracking event recorded live!</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
 
       {/* KPI Cards Grid */}
       <div className="grid gap-6 md:grid-cols-3">

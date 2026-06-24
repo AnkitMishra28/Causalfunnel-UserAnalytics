@@ -39,14 +39,6 @@ export async function POST(request: Request) {
     const newEvent = new Event(eventData);
     const savedEvent = await newEvent.save();
 
-    // Check if socket.io is running globally and emit the event
-    const io = (globalThis as typeof globalThis & {
-      io?: { emit: (event: string, data: unknown) => void };
-    }).io;
-    if (io) {
-      io.emit('new_event', savedEvent);
-    }
-
     return NextResponse.json(savedEvent, { 
       status: 201,
       headers: {
